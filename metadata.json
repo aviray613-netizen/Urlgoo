@@ -1,0 +1,6 @@
+{
+  "name": "Link Click Tracker",
+  "description": "Create short links and track the exact time (hours, minutes, seconds) they are clicked with detailed analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
