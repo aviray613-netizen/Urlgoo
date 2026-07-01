@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Click, Link } from '../types';
-import { Activity, Chrome, Globe, Cpu, MapPin, Calendar, HelpCircle, Filter, X } from 'lucide-react';
+import { Activity, Chrome, Globe, Cpu, MapPin, Calendar, HelpCircle, Filter, X, CheckSquare, Square } from 'lucide-react';
 
 interface ClickLogsProps {
   clicks: Click[];
@@ -12,14 +12,44 @@ interface ClickLogsProps {
 
 export default function ClickLogs({ clicks, links, selectedLinkId, onClearFilter }: ClickLogsProps) {
   const [showRawUserAgent, setShowRawUserAgent] = useState<string | null>(null);
+  
+  // Persisted state for checked clicks
+  const [checkedClickIds, setCheckedClickIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('checkedClickIds');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [showCheckedOnly, setShowCheckedOnly] = useState(false);
+
+  const toggleCheckClick = (clickId: string) => {
+    const updated = checkedClickIds.includes(clickId)
+      ? checkedClickIds.filter((id) => id !== clickId)
+      : [...checkedClickIds, clickId];
+    
+    setCheckedClickIds(updated);
+    try {
+      localStorage.setItem('checkedClickIds', JSON.stringify(updated));
+    } catch (e) {
+      console.error('Failed to save checked clicks:', e);
+    }
+  };
 
   // Find the selected link's details
   const selectedLink = links.find((l) => l.id === selectedLinkId);
 
   // Filter clicks if a specific link is selected
-  const filteredClicks = selectedLinkId
+  let filteredClicks = selectedLinkId
     ? clicks.filter((c) => c.linkId === selectedLinkId)
     : clicks;
+
+  // Filter clicks if "Show Checked Only" is active
+  if (showCheckedOnly) {
+    filteredClicks = filteredClicks.filter((c) => checkedClickIds.includes(c.id));
+  }
 
   // Simple parser to make raw User Agent strings elegant
   const parseUserAgent = (ua: string) => {
@@ -113,14 +143,14 @@ export default function ClickLogs({ clicks, links, selectedLinkId, onClearFilter
   return (
     <div id="click-logs-card" className="bg-slate-900/60 backdrop-blur-sm border border-slate-800 rounded-2xl shadow-xl overflow-hidden flex flex-col h-[520px]">
       {/* Card Header */}
-      <div className="p-5 border-b border-slate-800 bg-slate-900/40 flex items-center justify-between">
+      <div className="p-5 border-b border-slate-800 bg-slate-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
           <div>
-            <h3 className="font-semibold text-slate-200">Click Traffic Logs</h3>
-            <p className="text-[10px] text-slate-400">
+            <h3 className="font-semibold text-slate-200 font-sans tracking-tight">Click Traffic Logs</h3>
+            <p className="text-[10px] text-slate-400 mt-0.5 font-mono">
               {selectedLinkId ? (
-                <span className="text-emerald-400 flex items-center gap-1 mt-0.5">
+                <span className="text-emerald-400 flex items-center gap-1">
                   <Filter className="w-3 h-3" /> Filtering: "{selectedLink?.title || selectedLinkId}"
                 </span>
               ) : (
@@ -130,16 +160,37 @@ export default function ClickLogs({ clicks, links, selectedLinkId, onClearFilter
           </div>
         </div>
 
-        {selectedLinkId && (
+        <div className="flex items-center gap-2 w-full sm:w-auto self-stretch sm:self-auto justify-end">
+          {/* Persisted Marked Clicks filter button */}
           <button
-            id="clear-filter-btn"
-            onClick={onClearFilter}
-            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 hover:text-rose-400 border border-slate-700 rounded-lg text-xs font-semibold text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+            id="filter-marked-clicks-btn"
+            onClick={() => setShowCheckedOnly(!showCheckedOnly)}
+            className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              showCheckedOnly
+                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+            }`}
+            title="Toggle to view only checked/starred clicks"
           >
-            <X className="w-3 h-3" />
-            <span>Clear Filter</span>
+            {showCheckedOnly ? (
+              <CheckSquare className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Square className="w-3.5 h-3.5 text-slate-500" />
+            )}
+            <span>Show Checked ({checkedClickIds.length})</span>
           </button>
-        )}
+
+          {selectedLinkId && (
+            <button
+              id="clear-filter-btn"
+              onClick={onClearFilter}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 hover:text-rose-400 border border-slate-700 rounded-xl text-[11px] font-bold text-slate-300 transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <X className="w-3 h-3" />
+              <span>Clear Filter</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Logs Table Area */}
@@ -149,9 +200,11 @@ export default function ClickLogs({ clicks, links, selectedLinkId, onClearFilter
             <Activity className="w-12 h-12 opacity-15 mb-3 stroke-1" />
             <span className="font-medium text-slate-400">No clicks recorded yet</span>
             <span className="text-xs text-slate-500 mt-1 max-w-xs">
-              {selectedLinkId
-                ? 'No one has clicked this specific link yet. Use the "Test Link" button to trigger a click redirect!'
-                : 'Your links are waiting for clicks. Share the tracked links to see live visitor analytics.'}
+              {showCheckedOnly 
+                ? 'No checked/marked clicks found in your filters. Try checking/marking some click rows below first!'
+                : selectedLinkId
+                  ? 'No one has clicked this specific link yet. Use the "Test Link" button to trigger a click redirect!'
+                  : 'Your links are waiting for clicks. Share the tracked links to see live visitor analytics.'}
             </span>
           </div>
         ) : (
@@ -160,6 +213,7 @@ export default function ClickLogs({ clicks, links, selectedLinkId, onClearFilter
               <table className="min-w-full divide-y divide-slate-800/60">
                 <thead className="bg-slate-950/40 text-left text-[10px] text-slate-500 uppercase tracking-wider font-semibold sticky top-0 bg-slate-900 z-10">
                   <tr>
+                    <th scope="col" className="px-4 py-3 text-center w-12">Mark</th>
                     <th scope="col" className="px-5 py-3">Exact Click Time</th>
                     <th scope="col" className="px-5 py-3">Link</th>
                     <th scope="col" className="px-5 py-3">Channel / Source</th>
@@ -188,6 +242,29 @@ export default function ClickLogs({ clicks, links, selectedLinkId, onClearFilter
                           transition={{ duration: 0.5 }}
                           className="hover:bg-slate-800/20 transition-colors"
                         >
+                          {/* Checkbox Column */}
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <button
+                              id={`check-click-toggle-${click.id}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleCheckClick(click.id);
+                              }}
+                              className={`p-1.5 rounded-lg transition-all border cursor-pointer ${
+                                checkedClickIds.includes(click.id)
+                                  ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-md shadow-emerald-500/5'
+                                  : 'bg-slate-950 border-slate-800/80 text-slate-600 hover:text-slate-400 hover:border-slate-700'
+                              }`}
+                              title={checkedClickIds.includes(click.id) ? "Checked! Click to uncheck." : "Check/Mark this click to remember"}
+                            >
+                              {checkedClickIds.includes(click.id) ? (
+                                <CheckSquare className="w-3.5 h-3.5" />
+                              ) : (
+                                <Square className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </td>
+
                           {/* Exact Time Column with Hour, Minute, Second */}
                           <td className="px-5 py-3 whitespace-nowrap">
                             <div className="flex flex-col">

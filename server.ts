@@ -4,7 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { getLinks, addLink, deleteLink, getClicks, recordClick } from './src/db';
 import { Link, Click } from './src/types';
 
-async function startServer() {
+export async function startServer() {
   const app = express();
   const PORT = 3000;
 
@@ -323,9 +323,14 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  return app;
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer().then((app) => {
+    const PORT = 3000;
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  });
+}

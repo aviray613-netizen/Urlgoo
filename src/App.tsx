@@ -7,7 +7,7 @@ import CreateLinkForm from './components/CreateLinkForm';
 import LinksList from './components/LinksList';
 import ClickLogs from './components/ClickLogs';
 import ChannelBuilder from './components/ChannelBuilder';
-import { MousePointerClick, RefreshCw, Zap, Clock, Info, ShieldCheck, Globe, HelpCircle } from 'lucide-react';
+import { MousePointerClick, RefreshCw, Zap, Clock, Info, ShieldCheck, Globe, HelpCircle, Download } from 'lucide-react';
 
 export default function App() {
   const [links, setLinks] = useState<Link[]>([]);
@@ -26,6 +26,39 @@ export default function App() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Install PWA trigger state
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  // Listen to beforeinstallprompt for PWA support
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    window.addEventListener('appinstalled', () => {
+      setIsInstallable(false);
+      setDeferredPrompt(null);
+    });
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User installation choice outcome: ${outcome}`);
+    setDeferredPrompt(null);
+    setIsInstallable(false);
+  };
+
   // Tiny domain config
   const [domainMode, setDomainMode] = useState<'short' | 'custom' | 'actual'>(() => {
     return (localStorage.getItem('domainMode') as any) || 'actual';
@@ -33,6 +66,7 @@ export default function App() {
   const [customDomain, setCustomDomain] = useState(() => {
     return localStorage.getItem('customDomain') || 't.co';
   });
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
 
   // UTC clock update for seconds precision
   useEffect(() => {
@@ -203,6 +237,52 @@ export default function App() {
                   {autoRefresh ? 'ON (5s)' : 'OFF'}
                 </span>
               </button>
+            </div>
+
+            {/* Install App / PWA Button */}
+            <div className="relative">
+              <button
+                id="install-pwa-btn"
+                onClick={isInstallable ? handleInstallClick : () => setShowInstallGuide(!showInstallGuide)}
+                className="flex items-center gap-2 px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-lg shadow-emerald-500/15 active:scale-95"
+              >
+                <Download className="w-3.5 h-3.5 animate-bounce" />
+                <span>Add to Homescreen</span>
+              </button>
+
+              {/* Install Guide Popover for iOS / Safari / Desktop fallback */}
+              {showInstallGuide && (
+                <div className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-2xl z-50 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <h4 className="font-bold text-xs text-slate-200 flex items-center gap-1">
+                      <Download className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>How to Install Tracky</span>
+                    </h4>
+                    <button 
+                      onClick={() => setShowInstallGuide(false)}
+                      className="text-slate-500 hover:text-slate-300 font-bold text-xs px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="space-y-2 text-[11px] text-slate-300 font-sans">
+                    <p className="leading-relaxed">
+                      To install this application on your phone's home screen:
+                    </p>
+                    <div className="space-y-1.5 pl-1.5 border-l-2 border-emerald-500/30">
+                      <p>
+                        <strong>On Apple Safari (iOS):</strong> Tap the <span className="bg-slate-800 px-1 py-0.5 rounded font-bold text-slate-100">Share</span> button, scroll down, and tap <span className="text-emerald-400 font-bold">Add to Home Screen</span>.
+                      </p>
+                      <p>
+                        <strong>On Google Chrome:</strong> Click the <span className="text-emerald-400 font-bold">⋮</span> menu or the install icon in the URL bar, then click <span className="text-emerald-400 font-bold">Install</span>.
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-normal">
+                      Installing puts a dedicated icon on your device launcher, launches in a clean full-screen interface, and loads faster!
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Manual Refresh */}
